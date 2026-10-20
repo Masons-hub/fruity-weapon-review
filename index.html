@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; media-src blob:; connect-src 'self'; img-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Fruity Survivors · Weapon review</title>
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<section id="gate" class="gate">
+  <div class="gate-card"><p class="eyebrow">FRUITY SURVIVORS / PRIVATE REVIEW</p><span class="gate-mark" aria-hidden="true">✳</span><h1>A little strange.<br>A lot to review.</h1><p>Moving weapons, real enemies, and a place for every thought.</p>
+  <form id="unlock-form"><label for="password">Shared password</label><div class="unlock-row"><input id="password" type="password" autocomplete="current-password" required autofocus><button id="unlock" type="submit">Enter gallery →</button></div></form>
+  <p id="unlock-message" role="status"></p><small>Gallery media is encrypted. Your notes stay on this browser until you export them. A simple shared password is only casual privacy.</small></div>
+</section>
+<div id="app" hidden>
+<header class="topbar"><div><span class="brand-mark" aria-hidden="true">✳</span><strong>FRUITY SURVIVORS</strong><span class="header-label">Weapon review</span></div><nav aria-label="Review files"><button id="export">↓ Export JSON</button><button id="import">↑ Import JSON</button><button id="lock" class="quiet">Lock</button><input type="file" id="import-file" accept="application/json,.json" hidden></nav></header>
+<main class="workspace">
+<aside class="catalog" id="catalog-panel"><button id="catalog-toggle" aria-expanded="false" aria-controls="roster">Choose weapon <span id="mobile-current"></span> ▾</button><div class="catalog-heading"><h2>The arsenal</h2><span id="count"></span></div><label class="sr-only" for="search">Find a weapon</label><input id="search" type="search" placeholder="Find a weapon…" autocomplete="off"><label class="sr-only" for="filter">Filter review status</label><select id="filter"><option value="all">All weapons</option><option value="unreviewed">Not reviewed</option><option value="needs-work">Needs work</option><option value="approved">Looks good</option></select><p id="progress" class="muted"></p><div id="roster" role="navigation" aria-label="Weapons"></div></aside>
+<section class="review"><div class="title-row"><div><p class="eyebrow" id="weapon-kicker">PRODUCTION CAPTURE</p><h1 id="weapon-name"></h1><p id="weapon-tags" class="muted"></p></div><div class="step-buttons"><button id="previous" aria-label="Previous weapon">←</button><button id="next" aria-label="Next weapon">→</button></div></div>
+<div class="video-wrap"><video id="video" controls playsinline muted loop preload="metadata"></video><p id="media-message" role="status">Loading preview…</p></div>
+<div class="transport"><div><label for="speed">Playback</label><select id="speed"><option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="1.5">1½×</option></select><button id="frame-back" title="Pause and step back one frame">−1 frame</button><button id="frame-next" title="Pause and step forward one frame">+1 frame</button><button id="fullscreen">Full screen</button></div><button id="stamp">＋ Comment at <span id="playhead">0:00.0</span></button></div>
+<p class="capture-note" id="capture-note">Actual Godot gameplay · maximum weapon level · staged moving targets. Fixed-step footage shows animation timing, not live frame-rate performance.</p>
+<div class="details-row"><span id="relations"></span><span id="capture-revision"></span></div>
+</section>
+<aside class="notes"><div class="catalog-heading"><h2>Your verdict</h2><span id="save-state" role="status">Saved locally</span></div><label for="status">Review status</label><select id="status"><option value="unreviewed">Not reviewed</option><option value="needs-work">Needs work</option><option value="approved">Looks good</option></select><label for="notes">Notes for this weapon</label><textarea id="notes" rows="9" placeholder="What works? What feels off? Shape, motion, impact, readability…" maxlength="20000"></textarea><small>Autosaved on this browser. Export JSON to back up your feedback or send it back for changes.</small><h3>Moment notes <span id="comment-count"></span></h3><div id="comments"></div><p id="empty-comments" class="muted">Pause on something worth changing, then add a comment at that moment.</p></aside>
+</main><footer><span id="footer-status" role="status">Local notes · no account needed</span><span>MAKE IT WEIRD. MAKE IT READABLE.</span></footer>
+</div>
+<dialog id="comment-dialog"><form id="comment-form"><p class="eyebrow" id="comment-at"></p><h2>What do you see?</h2><label for="comment-text">Comment</label><textarea id="comment-text" rows="5" required maxlength="5000"></textarea><div class="dialog-actions"><button type="button" id="cancel-comment">Cancel</button><button type="submit">Save comment</button></div></form></dialog>
+<dialog id="import-dialog"><h2>Import review notes</h2><p id="import-summary"></p><p>Newer notes replace older notes for matching weapons. Other notes stay as they are.</p><div class="dialog-actions"><button id="cancel-import">Cancel</button><button id="confirm-import">Merge notes</button></div></dialog>
+</body></html>
