@@ -7,6 +7,8 @@ let saving = Promise.resolve(), saveSequence = 0, pendingImport, commentTime = 0
 let persistenceBlocked = false;
 let dirty = false;
 let editVersion = 0;
+let selectedClip;
+const clipLabel = c => c.variant === 'level1' ? 'Level 1' : c.variant === 'max' ? `Identity level ${c.level} · no draft rolls` : `Original review · level ${c.level}`;
 const video = $('video');
 const bytes = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 const base64 = value => { let s = ''; for (const n of new Uint8Array(value)) s += String.fromCharCode(n); return btoa(s); };
@@ -21,6 +23,25 @@ async function encrypt(data, usingKey = key) { const iv = crypto.getRandomValues
 function review(id = selected?.id) { return reviews[id] || {status:'unreviewed',notes:'',comments:[]}; }
 function error(message) { $('footer-status').textContent = message; }
 function snapshot() { return {schema:1,project:'fruity-survivors-weapon-review',exportedAt:new Date().toISOString(),captureRevision:catalog.revision,reviews}; }
+function renderDesign(w) {
+  const panel=$('design-content'); panel.replaceChildren();
+  $('archive-note').hidden=!w.archived;
+  const d=w.design_review; $('design-review').hidden=!d;
+  if(!d)return;
+  for(const [label,field] of [['How it works','actual_behavior'],['Design judgment','internal_verdict'],['Tradeoff','material_tradeoff']]) {
+    const heading=document.createElement('h3'),p=document.createElement('p');
+    heading.textContent=label; p.textContent=d[field]||''; panel.append(heading,p);
+  }
+}
+function renderIdeas() {
+  const panel=$('future-content');panel.replaceChildren();
+  const ideas=catalog.optional_future_concepts||[];$('future-ideas').hidden=!ideas.length;
+  for(const idea of ideas){
+    const heading=document.createElement('h3'),p=document.createElement('p');
+    heading.textContent=idea.name;p.textContent=idea.pitch;panel.append(heading,p);
+    for(const key of ['why_fun','tradeoff','risk'])if(idea[key]){const note=document.createElement('p');note.textContent=idea[key];panel.append(note);}
+  }
+}
 function queueSave() {
   dirty = true; editVersion++; clearTimeout(timer); $('save-state').textContent = 'Saving…';
   timer = setTimeout(persist,250);
@@ -65,28 +86,39 @@ function renderComments() {
   for (const c of comments) {
     const item=document.createElement('article'); item.className='comment';
     const bar=document.createElement('div'); bar.className='comment-bar';
-    const seek=document.createElement('button'); seek.className='time-link'; seek.textContent=time(c.at); seek.addEventListener('click',()=>{ video.pause(); video.currentTime=Math.min(c.at,video.duration||c.at); });
+    const seek=document.createElement('button'); seek.className='time-link'; seek.textContent=`${time(c.at)} · ${c.variant || 'original capture'}`;
+    seek.disabled=(c.variant||'legacy-max')!==selectedClip?.variant || (c.mediaRevision ? c.mediaRevision!==selectedClip?.mediaRevision : !!(c.captureRevision && c.captureRevision!==catalog.revision));
+    if(seek.disabled)seek.title='This note belongs to a different capture; its original timestamp is preserved.';
+    seek.addEventListener('click',()=>{ video.pause(); video.currentTime=Math.min(c.at,video.duration||c.at); });
     const remove=document.createElement('button'); remove.className='delete-comment'; remove.textContent='Delete'; remove.setAttribute('aria-label',`Delete comment at ${time(c.at)}`);
     remove.addEventListener('click',()=>{ if (!confirm('Delete this moment note?')) return; updateReview({comments:review().comments.filter(x=>x.id!==c.id)}); renderComments(); });
     const p=document.createElement('p'); p.textContent=c.text; bar.append(seek,remove); item.append(bar,p); $('comments').append(item);
   }
 }
-async function select(id) {
+async function select(id, variant) {
   const w=catalog.weapons.find(w=>w.id===id); if (!w) return;
-  selected=w; const request=++token; video.pause(); video.removeAttribute('src'); video.load();
+  selected=w;
+  renderDesign(w);
+  const clips=w.clips||[{...w,variant:'legacy-max'}];
+  selectedClip=clips.find(c=>c.variant===(variant||selectedClip?.variant))||clips[0];
+  const clip=selectedClip;
+  $('clip-variant').replaceChildren(...clips.map(c=>{const o=document.createElement('option');o.value=c.variant;o.textContent=clipLabel(c);return o;}));
+  $('clip-variant').value=clip.variant;
+  $('effective-stats').textContent=clip.effective_stats ? `Resolved inputs: ${Object.entries(clip.effective_stats).map(([k,v])=>`${k.replaceAll('_',' ')} ${typeof v==='number'?Number(v.toFixed(3)):typeof v==='boolean'?(v?'yes':'no'):String(v)}`).join(' · ')}. ${clip.stats_scope||''}` : 'Effective input stats were not recorded for this original capture.';
+  const request=++token; video.pause(); video.removeAttribute('src'); video.load();
   $('mobile-current').textContent = `${catalog.weapons.indexOf(w)+1}/${catalog.weapons.length}`;
   $('catalog-panel').classList.remove('is-open'); $('catalog-toggle').setAttribute('aria-expanded','false');
   if (currentURL) URL.revokeObjectURL(currentURL); currentURL=null;
   $('media-message').hidden=false; $('media-message').textContent='Decrypting gameplay preview…';
-  $('weapon-name').textContent=w.name; $('weapon-kicker').textContent=`WEAPON ${String(catalog.weapons.indexOf(w)+1).padStart(2,'0')} / ${catalog.weapons.length} · LEVEL ${w.level}`;
+  $('weapon-name').textContent=w.name; $('weapon-kicker').textContent=`WEAPON ${String(catalog.weapons.indexOf(w)+1).padStart(2,'0')} / ${catalog.weapons.length} · ${clipLabel(clip)}`;
   $('weapon-tags').textContent=w.tags.join(' / '); $('notes').value=review().notes; $('status').value=review().status;
   const base=catalog.weapons.find(x=>x.evolves_to===id), evolved=catalog.weapons.find(x=>x.id===w.evolves_to);
   $('relations').textContent=base ? `Evolution of ${base.name}` : evolved ? `Evolves into ${evolved.name}` : 'Standalone weapon';
-  $('capture-revision').textContent=`Capture ${catalog.revision.slice(0,8)} · ${w.fps} fps`;
-  $('capture-note').textContent='Actual Godot gameplay · maximum weapon level · staged moving targets. Fixed-step footage shows animation timing, not live frame-rate performance.'+(w.staged_kill_triggers>0?' Real enemy deaths are staged to trigger this kill-reactive weapon.':'');
+  $('capture-revision').textContent=`Gallery ${catalog.revision.slice(0,8)} · ${clip.fps} fps`+(clip.mediaRevision?` · Clip ${clip.mediaRevision.slice(0,8)}`:'');
+  $('capture-note').textContent=`Actual Godot gameplay · ${clipLabel(clip)} · staged moving targets. Fixed-step footage shows animation timing, not live frame-rate performance.`+(clip.staged_kill_triggers>0?' Real enemy deaths are staged to trigger this kill-reactive weapon.':'');
   history.replaceState(null,'',`#${encodeURIComponent(id)}`); renderRoster(); renderComments();
   try {
-    const raw=await (await get(w.media)).arrayBuffer(), clear=await decrypt(raw);
+    const raw=await (await get(clip.media)).arrayBuffer(), clear=await decrypt(raw);
     if(request!==token || !key) return;
     currentURL=URL.createObjectURL(new Blob([clear],{type:'video/mp4'})); video.src=currentURL;
     video.playbackRate=Number($('speed').value); $('media-message').hidden=true;
@@ -106,32 +138,49 @@ $('unlock-form').addEventListener('submit',async e=>{
     try { const stored=localStorage.getItem(STORE); if(stored) reviews=validateImport(JSON.parse(decoder.decode(await decrypt(bytes(stored))))).reviews; }
     catch { persistenceBlocked=true; error('Existing notes could not be read. They have not been overwritten. Export this session’s notes before leaving.'); }
     $('password').value=''; $('gate').hidden=true; $('app').hidden=false; $('count').textContent=catalog.weapons.length;
+    renderIdeas();
     await select(decodeURIComponent(location.hash.slice(1)) || catalog.weapons[0].id);
     if(!selected) await select(catalog.weapons[0].id);
   } catch(e) { $('unlock-message').textContent=e.message; }
   finally { $('unlock').disabled=false; }
 });
 $('search').addEventListener('input',renderRoster); $('filter').addEventListener('change',renderRoster);
+$('clip-variant').addEventListener('change',()=>select(selected.id,$('clip-variant').value));
 $('catalog-toggle').addEventListener('click',()=>{ const open=$('catalog-panel').classList.toggle('is-open'); $('catalog-toggle').setAttribute('aria-expanded',String(open)); });
 $('fullscreen').addEventListener('click',()=>{ if(video.webkitEnterFullscreen) video.webkitEnterFullscreen(); else video.requestFullscreen?.().catch(()=>error('Use your browser’s video full-screen control.')); });
 $('notes').addEventListener('input',()=>updateReview({notes:$('notes').value})); $('status').addEventListener('change',()=>updateReview({status:$('status').value}));
 for(const [button,offset] of [['previous',-1],['next',1]]) $(button).addEventListener('click',()=>{ const i=catalog.weapons.indexOf(selected); select(catalog.weapons[(i+offset+catalog.weapons.length)%catalog.weapons.length].id); });
 $('speed').addEventListener('change',()=>video.playbackRate=Number($('speed').value));
-for(const [button,offset] of [['frame-back',-1],['frame-next',1]]) $(button).addEventListener('click',()=>{ video.pause(); if(Number.isFinite(video.duration)) video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+offset/selected.fps)); });
+for(const [button,offset] of [['frame-back',-1],['frame-next',1]]) $(button).addEventListener('click',()=>{ video.pause(); if(Number.isFinite(video.duration)) video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+offset/selectedClip.fps)); });
 video.addEventListener('timeupdate',()=>$('playhead').textContent=time(video.currentTime));
 video.addEventListener('error',()=>{ if(video.hasAttribute('src')) { $('media-message').hidden=false; $('media-message').textContent='This browser could not decode the video. Try a current Chrome, Edge, Firefox or Safari.'; } });
 $('stamp').addEventListener('click',()=>{ if(!Number.isFinite(video.duration)) return; video.pause(); commentTime=video.currentTime; $('comment-at').textContent=`${selected.name} · ${time(commentTime)}`; $('comment-text').value=''; $('comment-dialog').showModal(); $('comment-text').focus(); });
 $('cancel-comment').addEventListener('click',()=>$('comment-dialog').close());
-$('comment-form').addEventListener('submit',e=>{ e.preventDefault(); const text=$('comment-text').value.trim(); if(!text) return; updateReview({comments:[...review().comments,{id:crypto.randomUUID(),at:commentTime,text,createdAt:new Date().toISOString()}]}); renderComments(); $('comment-dialog').close(); });
+$('comment-form').addEventListener('submit',e=>{ e.preventDefault(); const text=$('comment-text').value.trim(); if(!text) return; updateReview({comments:[...review().comments,{id:crypto.randomUUID(),at:commentTime,text,variant:selectedClip.variant,captureRevision:catalog.revision,...(selectedClip.mediaRevision?{mediaRevision:selectedClip.mediaRevision}:{}),createdAt:new Date().toISOString()}]}); renderComments(); $('comment-dialog').close(); });
 function download(data,name) { const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); const a=document.createElement('a'); a.href=url; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); }
 $('export').addEventListener('click',()=>{ download(snapshot(),`fruity-weapon-reviews-${new Date().toISOString().slice(0,10)}.json`); dirty=false; error('JSON exported. Keep it as a backup or send it back with your feedback.'); });
+$('copy-json').addEventListener('click',async()=>{
+  const json=JSON.stringify(snapshot(),null,2),version=editVersion;
+  try{
+    if(!navigator.clipboard?.writeText)throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(json);
+    if(version===editVersion)dirty=false;
+    error('JSON copied. Paste it into chat or save it as a backup.');
+  }catch{
+    $('copy-text').value=json;$('copy-dialog').showModal();$('copy-text').focus();$('copy-text').select();
+    error('Automatic copying is unavailable. Copy the selected JSON, or use Export JSON.');
+  }
+});
+$('select-json').addEventListener('click',()=>{$('copy-text').focus();$('copy-text').select();});
+$('close-copy').addEventListener('click',()=>$('copy-dialog').close());
+$('copy-dialog').addEventListener('close',()=>{$('copy-text').value='';});
 function validateImport(data) {
   if(data?.schema!==1 || data?.project!=='fruity-survivors-weapon-review' || !data.reviews || typeof data.reviews!=='object' || Array.isArray(data.reviews)) throw new Error('Not a Fruity Survivors weapon review file.');
   const cleaned={}; let skipped=0;
   for(const [id,r] of Object.entries(data.reviews)) {
     if(!catalog.weapons.some(w=>w.id===id)) { skipped++; continue; }
     if(!r || !['unreviewed','needs-work','approved'].includes(r.status) || typeof r.notes!=='string' || r.notes.length>20000 || !Array.isArray(r.comments) || r.comments.length>1000 || typeof r.updatedAt!=='string' || !Number.isFinite(Date.parse(r.updatedAt))) throw new Error(`Invalid notes for ${id}. Nothing imported.`);
-    const comments=r.comments.map(c=>{ if(!c || typeof c.id!=='string' || c.id.length>100 || !Number.isFinite(c.at)||c.at<0||c.at>3600||typeof c.text!=='string'||c.text.length>5000) throw new Error(`Invalid moment note for ${id}.`); return {id:c.id,at:c.at,text:c.text,createdAt:typeof c.createdAt==='string'?c.createdAt:r.updatedAt}; });
+    const comments=r.comments.map(c=>{ if(!c || typeof c.id!=='string' || c.id.length>100 || !Number.isFinite(c.at)||c.at<0||c.at>3600||typeof c.text!=='string'||c.text.length>5000) throw new Error(`Invalid moment note for ${id}.`); return {id:c.id,at:c.at,text:c.text,...(typeof c.variant==='string'?{variant:c.variant}:{}),...(typeof c.captureRevision==='string'?{captureRevision:c.captureRevision}:{}),...(typeof c.mediaRevision==='string'&&/^[a-f0-9]{64}$/.test(c.mediaRevision)?{mediaRevision:c.mediaRevision}:{}),createdAt:typeof c.createdAt==='string'?c.createdAt:r.updatedAt}; });
     cleaned[id]={status:r.status,notes:r.notes,comments,updatedAt:r.updatedAt,weaponName:catalog.weapons.find(w=>w.id===id).name,clipRevision:typeof r.clipRevision==='string'?r.clipRevision:''};
   }
   return {reviews:cleaned,skipped};
